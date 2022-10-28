@@ -116,22 +116,22 @@ var Player = /** @class */ (function () {
     };
     Player.prototype.promptPlayer = function (table, userData) {
         var gameDecision;
-        if (table.getGamePhase === "betting") {
-            if (this.type === "ai")
+        if (table.getGamePhase == "betting") {
+            if (this.type == "ai")
                 gameDecision = this.getAiBetDecision(table);
             else
                 gameDecision = new GameDecision("bet", userData);
             return gameDecision;
         }
-        else if (table.getGamePhase === "acting") {
-            if (this.type === "ai")
+        else {
+            if (this.type == "ai")
                 gameDecision = this.getAiGameDecision(table);
-            else if (this.type === "user")
-                gameDecision = this.getUserGameDecision(userData);
-            gameDecision = this.getHouseGameDecision(table);
+            else if (this.type == "user")
+                gameDecision = this.getUserGameDecision(table, userData);
+            else
+                gameDecision = this.getHouseGameDecision(table);
             return gameDecision;
         }
-        return new GameDecision("null", 404);
     };
     Object.defineProperty(Player.prototype, "getHandScore", {
         get: function () {
@@ -205,7 +205,7 @@ var Player = /** @class */ (function () {
                 table.getTurnPlayer().setBet = table.getTurnPlayer().getBet * 2;
         }
         else if (this.gameStatus === "hit") {
-            var actionList = ["surrender", "stand", "hit", "double"];
+            var actionList = ["stand", "hit"];
             gameDecision = new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
         else {
@@ -213,13 +213,15 @@ var Player = /** @class */ (function () {
         }
         return gameDecision;
     };
-    Player.prototype.getUserGameDecision = function (userData) {
+    Player.prototype.getUserGameDecision = function (table, userData) {
+        console.log("user " + "".concat(userData));
         var gameDecision;
         if (this.isBlackJack()) {
             gameDecision = new GameDecision("blackjack", this.bet);
         }
         else {
             gameDecision = new GameDecision(userData, this.bet);
+            gameDecision.setAction = userData;
         }
         return gameDecision;
     };
@@ -419,13 +421,13 @@ var Table = /** @class */ (function () {
         return flag;
     };
     Table.prototype.evaluateMove = function (gameDecision, player) {
+        console.log("evaluateMove" + "".concat(player.getType + gameDecision.getAction));
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
         switch (gameDecision.getAction) {
             case "betting":
                 break;
             case "hit":
-                // if (typeof player.drawOne(this) !== null && typeof player.drawOne(this) !== undefined)
                 player.drawCard = player.drawOne(this);
                 if (player.getHandScore > 21)
                     player.setGameStatus = "bust";
@@ -436,6 +438,7 @@ var Table = /** @class */ (function () {
                 break;
             case "double":
                 if (this.turnCounter - 4 <= this.players.length) {
+                    player.setBet = player.getBet * 2;
                     player.drawCard = player.drawOne(this);
                     if (player.getHandScore > 21)
                         player.setGameStatus = "bust";
@@ -487,15 +490,13 @@ var Table = /** @class */ (function () {
         var turnPlayer = this.getTurnPlayer();
         if (this.gamePhase === "betting") {
             if (turnPlayer.getType === "house") {
-                console.log("house turn");
                 this.house.setGameStatus = "Waiting for bets";
-                console.log(this.house.getGameStatus);
             }
             else if (turnPlayer.getType === "user" || turnPlayer.getType === "ai") {
+                //evaluate確認
                 this.evaluateMove(turnPlayer.promptPlayer(this, userData), turnPlayer);
             }
             if (this.onLastPlayer()) {
-                console.log("onlast");
                 this.gamePhase = "acting";
                 this.house.setGameStatus = "Waiting for actions";
             }
@@ -616,7 +617,6 @@ var Table = /** @class */ (function () {
         return true;
     };
     Table.prototype.houseActionCompleted = function () {
-        console.log(this.house.getGameStatus);
         return this.house.getGameStatus != "hit" && this.house.getGameStatus != "Waiting for actions";
     };
     Object.defineProperty(Table.prototype, "getIsAllActionsCompleted", {
@@ -813,7 +813,6 @@ var View = /** @class */ (function () {
             " \n        <p class=\"m-0 text-center text-white rem3\">Bet: $".concat(user.getBet, "</p>\n        <p class=\"m-0 text-center text-white rem2\">Current Money: $").concat(user.getChips, "</p>\n        ");
     };
     View.updatePlayerInfo = function (table) {
-        console.log(table.getGamePhase);
         var houesCardDiv = document.getElementById("houesCardDiv");
         var playersDiv = document.getElementById("playersDiv");
         houesCardDiv.innerHTML = '';
@@ -938,6 +937,7 @@ var View = /** @class */ (function () {
             actionBtn.addEventListener("click", function () {
                 table.haveTurn(action);
                 Controller.controlTable(table, action);
+                console.log(action);
             });
         });
     };

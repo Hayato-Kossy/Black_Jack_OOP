@@ -108,18 +108,17 @@ class Player{
 
     public promptPlayer(table:Table, userData:any):GameDecision{
         let gameDecision:GameDecision;
-        if(table.getGamePhase === "betting") {
-            if(this.type === "ai") gameDecision = this.getAiBetDecision(table);
+        if(table.getGamePhase == "betting") {
+            if(this.type == "ai") gameDecision = this.getAiBetDecision(table);
             else gameDecision = new GameDecision("bet", userData);
             return gameDecision;
         }
-        else if(table.getGamePhase === "acting"){
-            if(this.type === "ai") gameDecision = this.getAiGameDecision(table);
-            else if(this.type === "user") gameDecision = this.getUserGameDecision(userData);
-            gameDecision = this.getHouseGameDecision(table);
+        else {
+            if(this.type == "ai") gameDecision = this.getAiGameDecision(table);
+            else if(this.type == "user") gameDecision = this.getUserGameDecision(table, userData);
+            else gameDecision = this.getHouseGameDecision(table);
             return gameDecision;
         }
-        return new GameDecision("null", 404);
     }
 
     public get getHandScore():number{
@@ -191,7 +190,7 @@ class Player{
             else if(gameDecision.getAction == "double") table.getTurnPlayer().setBet = table.getTurnPlayer().getBet * 2;
         }
         else if(this.gameStatus === "hit"){
-            let actionList = ["surrender", "stand", "hit", "double"];
+            let actionList = ["stand", "hit"];
             gameDecision = new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
         else{
@@ -200,13 +199,15 @@ class Player{
         return gameDecision;
     }
 
-    private getUserGameDecision(userData:any):GameDecision{
+    private getUserGameDecision(table:Table, userData:any):GameDecision{
+        console.log("user " + `${userData}`)
         let gameDecision:GameDecision;
         if(this.isBlackJack()){
             gameDecision = new GameDecision("blackjack", this.bet);
         }
         else{
             gameDecision = new GameDecision(userData, this.bet);
+            gameDecision.setAction = userData;
         }
         return gameDecision;    
     }
@@ -349,13 +350,14 @@ class Table{
     }
 
     private evaluateMove(gameDecision:GameDecision, player:Player) {
+        console.log("evaluateMove" +`${player.getType+gameDecision.getAction}`)
+
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
         switch(gameDecision.getAction){
             case "betting":
                 break;
             case "hit":
-                // if (typeof player.drawOne(this) !== null && typeof player.drawOne(this) !== undefined)
                 player.drawCard = player.drawOne(this);
                 if (player.getHandScore > 21) player.setGameStatus = "bust";
                 break;
@@ -365,6 +367,7 @@ class Table{
                 break;
                 case "double":
                     if(this.turnCounter - 4 <= this.players.length){
+                        player.setBet = player.getBet * 2;
                         player.drawCard = player.drawOne(this);
                         if(player.getHandScore > 21) player.setGameStatus = "bust"
                         break;
@@ -418,15 +421,13 @@ class Table{
         let turnPlayer = this.getTurnPlayer();
         if(this.gamePhase === "betting"){
             if(turnPlayer.getType === "house"){
-                console.log("house turn")
                 this.house.setGameStatus = "Waiting for bets"
-                console.log(this.house.getGameStatus)
             }
             else if(turnPlayer.getType === "user" || turnPlayer.getType === "ai"){
+                //evaluate確認
                 this.evaluateMove(turnPlayer.promptPlayer(this, userData), turnPlayer);
             }
             if(this.onLastPlayer()){
-                console.log("onlast")
                 this.gamePhase = "acting";
                 this.house.setGameStatus = "Waiting for actions"
             }
@@ -544,7 +545,6 @@ class Table{
     }
 
     private houseActionCompleted():boolean{
-        console.log(this.house.getGameStatus)
         return this.house.getGameStatus != "hit" && this.house.getGameStatus != "Waiting for actions";
     }
 
@@ -766,7 +766,6 @@ class View{
     }
 
     static updatePlayerInfo(table:Table){
-        console.log(table.getGamePhase)
         let houesCardDiv:HTMLElement = document.getElementById("houesCardDiv")!
         let playersDiv:HTMLElement = document.getElementById("playersDiv")!;
         houesCardDiv.innerHTML = '';
@@ -964,6 +963,7 @@ class View{
             actionBtn.addEventListener("click", function(){
                 table.haveTurn(action);
                 Controller.controlTable(table, action);
+                console.log(action)
             })
         })
     }

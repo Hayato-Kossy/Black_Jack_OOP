@@ -115,37 +115,42 @@ var Player = /** @class */ (function () {
             return table.getDeck.getCards.pop();
     };
     Player.prototype.promptPlayer = function (table, userData) {
-        var gameDecision;
-        if (table.getGamePhase == "betting") {
+        if (table.getGamePhase === "betting") {
             if (this.type == "ai")
-                gameDecision = this.getAiBetDecision(table);
+                return this.getAiBetDecision(table);
             else
-                gameDecision = new GameDecision("bet", userData);
-            return gameDecision;
+                return new GameDecision("bet", userData);
         }
         else {
             if (this.type == "ai")
-                gameDecision = this.getAiGameDecision(table);
-            else if (this.type == "user")
-                gameDecision = this.getUserGameDecision(table, userData);
-            else
-                gameDecision = this.getHouseGameDecision(table);
-            return gameDecision;
+                return this.getAiGameDecision(table);
+            else if (this.type === "user")
+                return this.getUserGameDecision(userData);
+            return this.getHouseGameDecision(table);
         }
     };
     Object.defineProperty(Player.prototype, "getHandScore", {
         get: function () {
             var handScore = 0;
-            for (var i = 0; i < this.hand.length; i++) {
-                handScore += this.hand[i].getRankNumber;
-                if (handScore - 11 > 21 && this.hand[i].getRank === "A")
+            this.hand.forEach(function (card) { handScore += card.getRankNumber; });
+            var ace = this.countAce();
+            if (handScore > 21 && this.type != "house" && ace > 0) {
+                while (ace > 0 && handScore > 21) {
                     handScore -= 10;
+                    ace--;
+                }
             }
             return handScore;
         },
         enumerable: false,
         configurable: true
     });
+    Player.prototype.countAce = function () {
+        var count = 0;
+        this.hand.forEach(function (card) { if (card.getRank == "A")
+            count++; });
+        return count;
+    };
     Player.prototype.isBlackJack = function () {
         if (this.getHandScore == 21 && this.hand.length == 2)
             return true;
@@ -162,20 +167,16 @@ var Player = /** @class */ (function () {
     };
     //確認ずみ
     Player.prototype.getHouseGameDecision = function (table) {
-        var gameDecision;
-        if (table.allPlayersHitCompleted() && table.allPlayersBetCompleted()) {
+        if (table.allPlayersHitCompleted() && table.allPlayersBetCompleted() && table.userAndAICompleted) {
             if (this.isBlackJack())
                 return new GameDecision("blackjack", this.bet);
             else if (this.getHandScore < 17) {
-                gameDecision = new GameDecision("hit", -1);
+                return new GameDecision("hit", -1);
             }
-            else
-                gameDecision = new GameDecision("stand", -1);
-            console.log("house acted");
+            return new GameDecision("stand", -1);
         }
         else
-            gameDecision = new GameDecision(this.gameStatus, -1);
-        return gameDecision;
+            return new GameDecision(this.gameStatus, -1);
     };
     Player.prototype.getAiBetDecision = function (table) {
         var _this = this;
@@ -190,40 +191,37 @@ var Player = /** @class */ (function () {
         }
     };
     Player.prototype.getAiGameDecision = function (table) {
-        var gameDecision;
+        var gameDecision = new GameDecision("", -1);
+        var actionList = ["surrender", "stand", "hit", "double"];
         if (this.isBlackJack()) {
-            gameDecision = new GameDecision("blackjack", this.bet);
+            return new GameDecision("blackjack", this.bet);
         }
         else if (this.gameStatus === "bet") {
-            var actionList = ["surrender", "stand", "hit", "double"];
-            gameDecision = new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
             if (gameDecision.getAction == "double" && table.getTurnPlayer().chips < table.getTurnPlayer().bet * 2) {
                 gameDecision.setAction = "hit";
-                gameDecision = new GameDecision("hit", this.bet);
+                return new GameDecision("hit", this.bet);
             }
             else if (gameDecision.getAction == "double")
                 table.getTurnPlayer().setBet = table.getTurnPlayer().getBet * 2;
+            else
+                return new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
         else if (this.gameStatus === "hit") {
-            var actionList = ["stand", "hit"];
-            gameDecision = new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
+            var actionList_1 = ["stand", "hit"];
+            return new GameDecision(actionList_1[this.randomIntInRange(0, actionList_1.length)], this.bet);
         }
-        else {
-            gameDecision = new GameDecision(this.gameStatus, this.bet);
-        }
-        return gameDecision;
+        return new GameDecision(this.gameStatus, this.bet);
     };
-    Player.prototype.getUserGameDecision = function (table, userData) {
-        console.log("user " + "".concat(userData));
-        var gameDecision;
+    Player.prototype.getUserGameDecision = function (userData) {
+        console.log("".concat(this.getType) + "".concat(userData));
+        var gameDecision = new GameDecision("", -1);
         if (this.isBlackJack()) {
-            gameDecision = new GameDecision("blackjack", this.bet);
+            return new GameDecision("blackjack", this.bet);
         }
         else {
-            gameDecision = new GameDecision(userData, this.bet);
             gameDecision.setAction = userData;
+            return new GameDecision(userData, this.bet);
         }
-        return gameDecision;
     };
     Object.defineProperty(Player.prototype, "getGameStatus", {
         get: function () {
@@ -421,7 +419,6 @@ var Table = /** @class */ (function () {
         return flag;
     };
     Table.prototype.evaluateMove = function (gameDecision, player) {
-        console.log("evaluateMove" + "".concat(player.getType + gameDecision.getAction));
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
         switch (gameDecision.getAction) {
@@ -493,7 +490,6 @@ var Table = /** @class */ (function () {
                 this.house.setGameStatus = "Waiting for bets";
             }
             else if (turnPlayer.getType === "user" || turnPlayer.getType === "ai") {
-                //evaluate確認
                 this.evaluateMove(turnPlayer.promptPlayer(this, userData), turnPlayer);
             }
             if (this.onLastPlayer()) {
@@ -519,7 +515,7 @@ var Table = /** @class */ (function () {
         this.turnCounter++;
     };
     Table.prototype.onLastPlayer = function () {
-        return this.turnCounter % (this.players.length + 1) == this.players.length;
+        return this.turnCounter % (this.players.length + 1) === this.players.length;
     };
     Table.prototype.allPlayersHitCompleted = function () {
         this.players.forEach(function (player) {
@@ -528,13 +524,18 @@ var Table = /** @class */ (function () {
         });
         return true;
     };
-    // public get allPlayerFinished():boolean{
-    //     const array = ["bust", "blackjack", "double", "stand"];
-    //     this.players.forEach((player) => {
-    //         if (!array.indexOf(player.getGameStatus))return false;
-    //     })
-    //     return true;
-    // }
+    Object.defineProperty(Table.prototype, "userAndAICompleted", {
+        get: function () {
+            var actionList = ["stand"];
+            this.players.forEach(function (player) {
+                if (!actionList.indexOf(player.getGameStatus))
+                    return false;
+            });
+            return true;
+        },
+        enumerable: false,
+        configurable: true
+    });
     Table.prototype.evaluateWinners = function () {
         var _this = this;
         this.players.forEach(function (player) {
@@ -630,7 +631,8 @@ var Table = /** @class */ (function () {
         var index = this.turnCounter % (this.players.length + 1);
         if (index === 0)
             return this.house;
-        return this.players[index - 1];
+        else
+            return this.players[index - 1];
     };
     Object.defineProperty(Table.prototype, "getGamePhase", {
         get: function () {

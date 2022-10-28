@@ -107,28 +107,34 @@ class Player{
     }
 
     public promptPlayer(table:Table, userData:any):GameDecision{
-        let gameDecision:GameDecision;
-        if(table.getGamePhase == "betting") {
-            if(this.type == "ai") gameDecision = this.getAiBetDecision(table);
-            else gameDecision = new GameDecision("bet", userData);
-            return gameDecision;
+        if(table.getGamePhase === "betting") {
+            if(this.type == "ai") return this.getAiBetDecision(table);
+            else return new GameDecision("bet", userData);
         }
         else {
-            if(this.type == "ai") gameDecision = this.getAiGameDecision(table);
-            else if(this.type == "user") gameDecision = this.getUserGameDecision(table, userData);
-            else gameDecision = this.getHouseGameDecision(table);
-            return gameDecision;
+            if(this.type == "ai") return this.getAiGameDecision(table);
+            else if(this.type === "user") return this.getUserGameDecision(userData);
+            return this.getHouseGameDecision(table);
         }
     }
 
     public get getHandScore():number{
-        let handScore:number = 0;
-        
-            for (let i = 0; i < this.hand.length; i++){
-                handScore += this.hand[i].getRankNumber;
-                if (handScore - 11 > 21 && this.hand[i].getRank === "A") handScore -= 10;
+        let handScore = 0;
+        this.hand.forEach(card=>{handScore += card.getRankNumber})
+        let ace = this.countAce()
+        if(handScore > 21 && this.type != "house" && ace > 0){
+            while(ace > 0 && handScore > 21){
+                handScore -= 10;
+                ace--;
             }
+        }
         return handScore;
+    }
+
+    private countAce():number{
+        let count = 0;
+        this.hand.forEach(card=>{if(card.getRank == "A") count++;});
+        return count;
     }
 
     public isBlackJack(){
@@ -148,18 +154,14 @@ class Player{
 
     //確認ずみ
     private getHouseGameDecision(table:Table):GameDecision{
-        let gameDecision:GameDecision;
-        if(table.allPlayersHitCompleted() && table.allPlayersBetCompleted()){
+        if(table.allPlayersHitCompleted() && table.allPlayersBetCompleted() && table.userAndAICompleted){
             if(this.isBlackJack()) return new GameDecision("blackjack", this.bet);
             else if(this.getHandScore < 17) {
-                gameDecision = new GameDecision("hit", -1);
+                return new GameDecision("hit", -1);
             }
-            else gameDecision = new GameDecision("stand", -1);
-            console.log("house acted")
+            return new GameDecision("stand", -1);
         }
-        else gameDecision = new GameDecision(this.gameStatus, -1);
-
-        return gameDecision;
+        else return new GameDecision(this.gameStatus, -1);
     }
 
     private getAiBetDecision(table:Table):GameDecision{
@@ -175,41 +177,38 @@ class Player{
         }
     }
 
-    private getAiGameDecision(table:Table){
-        let gameDecision:GameDecision;
+    private getAiGameDecision(table:Table):GameDecision{
+        let gameDecision:GameDecision = new GameDecision("",-1)
+        let actionList = ["surrender", "stand", "hit", "double"];
         if(this.isBlackJack()){
-            gameDecision = new GameDecision("blackjack", this.bet);
+            return new GameDecision("blackjack", this.bet);
         }
         else if(this.gameStatus === "bet"){
-            let actionList = ["surrender", "stand", "hit", "double"];
-            gameDecision = new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
             if(gameDecision.getAction == "double" && table.getTurnPlayer().chips < table.getTurnPlayer().bet * 2){
                 gameDecision.setAction = "hit";
-                gameDecision = new GameDecision("hit", this.bet);
+                return new GameDecision("hit", this.bet);
             }
             else if(gameDecision.getAction == "double") table.getTurnPlayer().setBet = table.getTurnPlayer().getBet * 2;
+            else return new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
         else if(this.gameStatus === "hit"){
             let actionList = ["stand", "hit"];
-            gameDecision = new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
+            return new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
-        else{
-            gameDecision = new GameDecision(this.gameStatus, this.bet);
-        }
-        return gameDecision;
+        return new GameDecision(this.gameStatus, this.bet);
+
     }
 
-    private getUserGameDecision(table:Table, userData:any):GameDecision{
-        console.log("user " + `${userData}`)
-        let gameDecision:GameDecision;
+    private getUserGameDecision(userData:any):GameDecision{
+        console.log(`${this.getType}` + `${userData}`)
+        let gameDecision:GameDecision = new GameDecision("",-1);
         if(this.isBlackJack()){
-            gameDecision = new GameDecision("blackjack", this.bet);
+            return new GameDecision("blackjack", this.bet);
         }
         else{
-            gameDecision = new GameDecision(userData, this.bet);
             gameDecision.setAction = userData;
+            return new GameDecision(userData, this.bet);
         }
-        return gameDecision;    
     }
 
     public get getGameStatus():string{
@@ -350,7 +349,6 @@ class Table{
     }
 
     private evaluateMove(gameDecision:GameDecision, player:Player) {
-        console.log("evaluateMove" +`${player.getType+gameDecision.getAction}`)
 
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
@@ -424,7 +422,6 @@ class Table{
                 this.house.setGameStatus = "Waiting for bets"
             }
             else if(turnPlayer.getType === "user" || turnPlayer.getType === "ai"){
-                //evaluate確認
                 this.evaluateMove(turnPlayer.promptPlayer(this, userData), turnPlayer);
             }
             if(this.onLastPlayer()){
@@ -452,7 +449,7 @@ class Table{
     }
 
     private onLastPlayer():boolean{
-        return this.turnCounter % (this.players.length + 1) == this.players.length;
+        return this.turnCounter % (this.players.length + 1) === this.players.length;
     }
 
     public allPlayersHitCompleted():boolean{
@@ -462,17 +459,14 @@ class Table{
         return true;
     }
 
-    // public get allPlayerFinished():boolean{
-    //     const array = ["bust", "blackjack", "double", "stand"];
-
-    //     this.players.forEach((player) => {
-    //         if (!array.indexOf(player.getGameStatus))return false;
-    //     })
-    //     return true;
-    // }
-
+    public get userAndAICompleted():boolean{
+        let actionList = ["stand"]
+        this.players.forEach((player) => {
+            if (!actionList.indexOf(player.getGameStatus)) return false;
+        })
+        return true;
+    }
     private evaluateWinners():void{
-
         this.players.forEach((player) => {
             if(player.getGameStatus === "surrender") this.calcWinAmount(player, "surrender");
             else if(player.getGameStatus === "bust") this.calcWinAmount(player, "bust");
@@ -555,7 +549,7 @@ class Table{
     public getTurnPlayer():Player{
         let index:number = this.turnCounter % (this.players.length + 1);
         if (index === 0) return this.house;
-        return this.players[index - 1];
+        else return this.players[index - 1];
     }
     public get getGamePhase():string{
         return this.gamePhase;
@@ -667,8 +661,6 @@ class Controller{
             player.setChips = player.getChips - betCoin;
         }
     }
-
-
 }
 
 class View{
@@ -979,7 +971,7 @@ class View{
         return div;
     }
 
-    static renderResult(table:Table){
+    static renderResult(table:Table):void{
         let actionsAndBetsDiv:HTMLElement = document.getElementById("actionsAndBetsDiv")!;
         let userData = table.getPlayers.filter(user=>user.getType == "user");
         let gameResult = userData[0].getGameResult.toUpperCase();
@@ -1013,7 +1005,7 @@ class View{
         resultLogDiv.append(div);
     }
 
-    static renderAllLog(table:Table){
+    static renderAllLog(table:Table):void{
         let resultLogDiv:HTMLElement = document.getElementById("resultLogDiv")!;
         let div = document.createElement("div");
         div.classList.add("text-white", "w-50");
@@ -1027,7 +1019,7 @@ class View{
         resultLogDiv.append(div);        
     }
 
-    static renderGameOver(){
+    static renderGameOver():void{
         let actionsAndBetsDiv:HTMLElement = document.getElementById("actionsAndBetsDiv")!;
         actionsAndBetsDiv.innerHTML +=
 

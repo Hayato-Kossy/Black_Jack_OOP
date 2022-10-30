@@ -115,19 +115,25 @@ var Player = /** @class */ (function () {
             return table.getDeck.getCards.pop();
     };
     Player.prototype.promptPlayer = function (table, userData) {
+        console.log("done prompt");
+        var gameDecision = new GameDecision("", userData);
         if (table.getGamePhase === "betting") {
             if (this.type == "ai")
-                return this.getAiBetDecision(table);
+                gameDecision = this.getAiBetDecision(table);
             else
-                return new GameDecision("bet", userData);
+                gameDecision = new GameDecision("bet", userData);
         }
-        else {
-            if (this.type == "ai")
-                return this.getAiGameDecision(table);
+        else if (table.getGamePhase === "acting") {
+            if (this.type === "ai")
+                gameDecision = this.getAiGameDecision(table);
             else if (this.type === "user")
-                return this.getUserGameDecision(userData);
-            return this.getHouseGameDecision(table);
+                gameDecision = this.getUserGameDecision(userData);
+            else {
+                gameDecision = this.getHouseGameDecision(table);
+            }
+            ;
         }
+        return gameDecision;
     };
     Object.defineProperty(Player.prototype, "getHandScore", {
         get: function () {
@@ -167,7 +173,8 @@ var Player = /** @class */ (function () {
     };
     //確認ずみ
     Player.prototype.getHouseGameDecision = function (table) {
-        if (table.allPlayersHitCompleted() && table.allPlayersBetCompleted() && table.userAndAICompleted) {
+        console.log("house");
+        if (table.allPlayersHitCompleted() && table.allPlayersBetCompleted()) {
             if (this.isBlackJack())
                 return new GameDecision("blackjack", this.bet);
             else if (this.getHandScore < 17) {
@@ -213,13 +220,12 @@ var Player = /** @class */ (function () {
         return new GameDecision(this.gameStatus, this.bet);
     };
     Player.prototype.getUserGameDecision = function (userData) {
-        console.log("".concat(this.getType) + "".concat(userData));
+        // console.log(`${this.getType}` + `${userData}`)
         var gameDecision = new GameDecision("", -1);
         if (this.isBlackJack()) {
             return new GameDecision("blackjack", this.bet);
         }
         else {
-            gameDecision.setAction = userData;
             return new GameDecision(userData, this.bet);
         }
     };
@@ -397,7 +403,9 @@ var Table = /** @class */ (function () {
     }
     Object.defineProperty(Table.prototype, "setPlayers", {
         set: function (userName) {
-            this.players.push(new Player("AI1", "ai", this.gameType), new Player(userName, "user", this.gameType), new Player("AI2", "ai", this.gameType));
+            this.players.push(new Player("AI1", "ai", this.gameType));
+            this.players.push(new Player(userName, "user", this.gameType));
+            this.players.push(new Player("AI2", "ai", this.gameType));
         },
         enumerable: false,
         configurable: true
@@ -419,6 +427,7 @@ var Table = /** @class */ (function () {
         return flag;
     };
     Table.prototype.evaluateMove = function (gameDecision, player) {
+        // console.log("done evaluate")
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
         switch (gameDecision.getAction) {
@@ -484,6 +493,7 @@ var Table = /** @class */ (function () {
         this.house.setGameStatus = "betting";
     };
     Table.prototype.haveTurn = function (userData) {
+        // console.log("done haveturn")
         var turnPlayer = this.getTurnPlayer();
         if (this.gamePhase === "betting") {
             if (turnPlayer.getType === "house") {
@@ -518,10 +528,14 @@ var Table = /** @class */ (function () {
         return this.turnCounter % (this.players.length + 1) === this.players.length;
     };
     Table.prototype.allPlayersHitCompleted = function () {
-        this.players.forEach(function (player) {
-            if (player.getGameStatus === "hit")
+        for (var i = 0; i < this.players.length; i++) {
+            if (this.players[i].getGameStatus == "hit") {
+                console.log("False");
                 return false;
-        });
+            }
+            ;
+        }
+        console.log("True");
         return true;
     };
     Object.defineProperty(Table.prototype, "userAndAICompleted", {
@@ -611,10 +625,14 @@ var Table = /** @class */ (function () {
             player.setGameStatus = "game over";
     };
     Table.prototype.allPlayersBetCompleted = function () {
-        this.players.forEach(function (player) {
-            if (player.getGameStatus === "bet")
+        for (var i = 0; i < this.players.length; i++) {
+            if (this.players[i].getGameStatus == "bet") {
+                console.log("False");
                 return false;
-        });
+            }
+            ;
+        }
+        console.log("True");
         return true;
     };
     Table.prototype.houseActionCompleted = function () {
@@ -714,10 +732,10 @@ var Controller = /** @class */ (function () {
         View.displayBlock(View.config.mainPage);
         table.setPlayers = userName;
         table.blackjackAssignPlayerHands();
-        Controller.controlTable(table, "");
+        Controller.controlTable(table);
     };
     //動作確認済み
-    Controller.controlTable = function (table, userData) {
+    Controller.controlTable = function (table) {
         View.renderTable(table);
         var player = table.getTurnPlayer();
         if (player.getType === "user" && table.getGamePhase === "betting") {
@@ -729,11 +747,11 @@ var Controller = /** @class */ (function () {
             if (player.getGameStatus === "bet" || player.getGameStatus === "hit") {
                 if (player.isBlackJack() || player.getHandScore === 21) {
                     table.haveTurn("stand");
-                    Controller.controlTable(table, userData);
+                    Controller.controlTable(table);
                 }
                 else {
                     View.updatePlayerInfo(table);
-                    View.updateActionBetInfo(table, player);
+                    View.updateActionBetInfo(table);
                     if (player.getGameStatus === "hit")
                         View.disableBtnAfterFirstAction();
                     View.renderCards(table, false);
@@ -741,7 +759,7 @@ var Controller = /** @class */ (function () {
             }
             else {
                 table.haveTurn(player.getGameStatus);
-                Controller.controlTable(table, userData);
+                Controller.controlTable(table);
             }
         }
         else if (table.getGamePhase === "roundOver") {
@@ -755,7 +773,7 @@ var Controller = /** @class */ (function () {
         else
             setTimeout(function () {
                 table.haveTurn(table);
-                Controller.controlTable(table, userData);
+                Controller.controlTable(table);
             }, 1000);
     };
     Controller.clickBetBtn = function (betCoin, player) {
@@ -858,7 +876,7 @@ var View = /** @class */ (function () {
                 alert("Minimum bet is $" + "5" + '.');
             else {
                 user.setChips = user.getChips + user.getBet;
-                Controller.controlTable(table, "");
+                Controller.controlTable(table);
             }
         });
         var reset = betsDiv.querySelectorAll("#reset")[0];
@@ -924,12 +942,12 @@ var View = /** @class */ (function () {
         betBtnDiv.innerHTML = "";
         View.renderBetInfo(table);
     };
-    View.updateActionBetInfo = function (table, player) {
+    View.updateActionBetInfo = function (table) {
         var actionsAndBetsDiv = document.getElementById("actionsAndBetsDiv");
         actionsAndBetsDiv.innerHTML = '';
-        View.renderActionBtn(table, player);
+        View.renderActionBtn(table);
     };
-    View.renderActionBtn = function (table, player) {
+    View.renderActionBtn = function (table) {
         var actionsAndBetsDiv = document.getElementById("actionsAndBetsDiv");
         actionsAndBetsDiv.innerHTML =
             "\n        <div id =\"actionsDiv\" class=\"d-flex flex-wrap w-70 p-3 justify-content-center\">\n            <div class=\"py-2 mx-2\">\n                <a class=\"text-dark btn btn-light px-5 py-1\" id=\"surrenderBtn\">Surrender</a>\n            </div>\n            <div class=\"py-2 mx-2\">\n                <a class=\"btn btn-success px-5 py-1\" id=\"standBtn\">Stand</a>\n            </div>\n            <div class=\"py-2 mx-2\">\n                <a class=\"btn btn-warning px-5 py-1\" id=\"hitBtn\">Hit</a>\n            </div>\n            <div class=\"py-2 mx-2\">\n                <a class=\"btn btn-danger px-5 py-1\" id=\"doubleBtn\">Double</a>\n            </div>            \n        </div>\n        ";
@@ -938,8 +956,8 @@ var View = /** @class */ (function () {
             var actionBtn = document.getElementById(action + "Btn");
             actionBtn.addEventListener("click", function () {
                 table.haveTurn(action);
-                Controller.controlTable(table, action);
-                console.log(action);
+                Controller.controlTable(table);
+                // console.log(action)
             });
         });
     };
@@ -955,7 +973,7 @@ var View = /** @class */ (function () {
     };
     View.renderResult = function (table) {
         var actionsAndBetsDiv = document.getElementById("actionsAndBetsDiv");
-        var userData = table.getPlayers.filter(function (user) { return user.getType == "user"; });
+        var userData = table.getPlayers.filter(function (user) { return user.getType === "user"; });
         var gameResult = userData[0].getGameResult.toUpperCase();
         var div = View.createNextGameBtnDiv();
         actionsAndBetsDiv.innerHTML = '';
@@ -968,7 +986,7 @@ var View = /** @class */ (function () {
         nextGameBtn.addEventListener("click", function () {
             table.haveTurn(table);
             table.blackjackAssignPlayerHands();
-            Controller.controlTable(table, "");
+            Controller.controlTable(table);
         });
     };
     View.renderLogResult = function (table) {

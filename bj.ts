@@ -107,15 +107,20 @@ class Player{
     }
 
     public promptPlayer(table:Table, userData:any):GameDecision{
+        console.log("done prompt")
+
+        let gameDecision:GameDecision = new GameDecision("", userData)
         if(table.getGamePhase === "betting") {
-            if(this.type == "ai") return this.getAiBetDecision(table);
-            else return new GameDecision("bet", userData);
+            if(this.type == "ai") gameDecision = this.getAiBetDecision(table);
+            else gameDecision = new GameDecision("bet", userData);
         }
-        else {
-            if(this.type == "ai") return this.getAiGameDecision(table);
-            else if(this.type === "user") return this.getUserGameDecision(userData);
-            return this.getHouseGameDecision(table);
+        else if (table.getGamePhase === "acting"){
+            if(this.type === "ai") gameDecision = this.getAiGameDecision(table);
+            else if(this.type === "user") gameDecision = this.getUserGameDecision(userData);
+            else {gameDecision = this.getHouseGameDecision(table)
+            };
         }
+        return gameDecision;
     }
 
     public get getHandScore():number{
@@ -154,7 +159,8 @@ class Player{
 
     //確認ずみ
     private getHouseGameDecision(table:Table):GameDecision{
-        if(table.allPlayersHitCompleted() && table.allPlayersBetCompleted() && table.userAndAICompleted){
+        console.log("house")
+        if(table.allPlayersHitCompleted() && table.allPlayersBetCompleted()){
             if(this.isBlackJack()) return new GameDecision("blackjack", this.bet);
             else if(this.getHandScore < 17) {
                 return new GameDecision("hit", -1);
@@ -200,13 +206,12 @@ class Player{
     }
 
     private getUserGameDecision(userData:any):GameDecision{
-        console.log(`${this.getType}` + `${userData}`)
+        // console.log(`${this.getType}` + `${userData}`)
         let gameDecision:GameDecision = new GameDecision("",-1);
         if(this.isBlackJack()){
             return new GameDecision("blackjack", this.bet);
         }
         else{
-            gameDecision.setAction = userData;
             return new GameDecision(userData, this.bet);
         }
     }
@@ -310,7 +315,6 @@ class GameDecision{
     }
 }
 
-
 class Table{
     private deck:Deck;
     private gamePhase:string;
@@ -330,7 +334,9 @@ class Table{
     }
 
     public set setPlayers(userName:string){
-        this.players.push(new Player("AI1", "ai", this.gameType), new Player(userName, "user", this.gameType),new Player("AI2", "ai", this.gameType));
+        this.players.push(new Player("AI1", "ai", this.gameType));
+        this.players.push(new Player(userName, "user", this.gameType));
+        this.players.push(new Player("AI2", "ai", this.gameType));
     }
 
     public cardIsOnTable(suit:string, rank:string):boolean{
@@ -349,7 +355,7 @@ class Table{
     }
 
     private evaluateMove(gameDecision:GameDecision, player:Player) {
-
+        // console.log("done evaluate")
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
         switch(gameDecision.getAction){
@@ -416,6 +422,7 @@ class Table{
     }
 
     public haveTurn(userData:any):void{
+        // console.log("done haveturn")
         let turnPlayer = this.getTurnPlayer();
         if(this.gamePhase === "betting"){
             if(turnPlayer.getType === "house"){
@@ -453,10 +460,14 @@ class Table{
     }
 
     public allPlayersHitCompleted():boolean{
-        this.players.forEach((player) => {
-            if (player.getGameStatus === "hit") return false;
-        })
-        return true;
+        for(let i = 0; i < this.players.length; i++){
+            if(this.players[i].getGameStatus == "hit") {
+                console.log("False")
+                return false;
+            };
+        }
+        console.log("True")
+        return true; 
     }
 
     public get userAndAICompleted():boolean{
@@ -532,10 +543,14 @@ class Table{
     }
 
     public allPlayersBetCompleted():boolean{
-        this.players.forEach((player) => {
-            if (player.getGameStatus === "bet") return false;
-        })
-        return true;    
+        for(let i = 0; i < this.players.length; i++){
+            if(this.players[i].getGameStatus == "bet") {
+                console.log("False")
+                return false;
+            };
+        }
+        console.log("True")
+        return true;   
     }
 
     private houseActionCompleted():boolean{
@@ -606,11 +621,11 @@ class Controller{
         table.setPlayers = userName;
         table.blackjackAssignPlayerHands();
 
-        Controller.controlTable(table, "");
+        Controller.controlTable(table);
     }
 
     //動作確認済み
-    static controlTable(table:Table,userData:any){
+    static controlTable(table:Table){
         View.renderTable(table);
         let player = table.getTurnPlayer()
         if(player.getType === "user" && table.getGamePhase === "betting"){
@@ -623,19 +638,19 @@ class Controller{
 
                 if(player.isBlackJack() || player.getHandScore === 21){
                         table.haveTurn("stand");
-                        Controller.controlTable(table, userData)
+                        Controller.controlTable(table)
                     }
 
                 else{
                     View.updatePlayerInfo(table)
-                    View.updateActionBetInfo(table, player);
+                    View.updateActionBetInfo(table);
                     if(player.getGameStatus === "hit") View.disableBtnAfterFirstAction();
                     View.renderCards(table, false);    
                 }
             }
             else{
                 table.haveTurn(player.getGameStatus);
-                Controller.controlTable(table, userData)
+                Controller.controlTable(table)
             }
             
         }
@@ -650,7 +665,7 @@ class Controller{
         }
         else setTimeout(function(){
             table.haveTurn(table);
-            Controller.controlTable(table, userData)
+            Controller.controlTable(table)
         },1000);
 
     }
@@ -818,7 +833,7 @@ class View{
             if(user.getBet < 5) alert("Minimum bet is $" + "5" + '.')
             else{
                 user.setChips = user.getChips + user.getBet;
-                Controller.controlTable(table, "");
+                Controller.controlTable(table);
             }
         })
 
@@ -924,13 +939,13 @@ class View{
         View.renderBetInfo(table);
     }
 
-    static updateActionBetInfo(table:Table, player:Player){
+    static updateActionBetInfo(table:Table){
         let actionsAndBetsDiv:HTMLElement = document.getElementById("actionsAndBetsDiv")!;
         actionsAndBetsDiv.innerHTML = '';
-        View.renderActionBtn(table, player);
+        View.renderActionBtn(table);
     }
 
-    static renderActionBtn(table:Table, player:Player){
+    static renderActionBtn(table:Table){
         let actionsAndBetsDiv:HTMLElement = document.getElementById("actionsAndBetsDiv")!;
         actionsAndBetsDiv.innerHTML =
         `
@@ -954,8 +969,8 @@ class View{
             let actionBtn:HTMLElement = document.getElementById(action + "Btn")!;
             actionBtn.addEventListener("click", function(){
                 table.haveTurn(action);
-                Controller.controlTable(table, action);
-                console.log(action)
+                Controller.controlTable(table);
+                // console.log(action)
             })
         })
     }
@@ -973,7 +988,7 @@ class View{
 
     static renderResult(table:Table):void{
         let actionsAndBetsDiv:HTMLElement = document.getElementById("actionsAndBetsDiv")!;
-        let userData = table.getPlayers.filter(user=>user.getType == "user");
+        let userData = table.getPlayers.filter(user=>user.getType === "user");
         let gameResult = userData[0].getGameResult.toUpperCase();
         let div = View.createNextGameBtnDiv();
 
@@ -989,7 +1004,7 @@ class View{
         nextGameBtn.addEventListener("click", function(){
             table.haveTurn(table)
             table.blackjackAssignPlayerHands();
-            Controller.controlTable(table,"");
+            Controller.controlTable(table);
         })
     }
 

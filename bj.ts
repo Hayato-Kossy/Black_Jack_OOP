@@ -198,13 +198,8 @@ class Player{
 
     public cheatCounting(table:Table):void{
         // countingの初期化
-        if (table.getTurnCounter % 4 === 0) {
-            table.getPlayers.forEach((player) => {
-                player.setCounting = 0
-            })
-            table.getHouse.setCounting = 0
-            table.setAllPlayerCounting = 0
-        }
+        table.setAllPlayerCounting = table.getAllPlayerCounting - this.getCounting
+        this.setCounting = 0
         const countingHashmap: { [key:string] : number;} = { 
             "10" : -1, 
             "J" : -1, 
@@ -326,6 +321,7 @@ class Player{
         this.counting = count;
     }
 }
+
 
 class GameDecision{
     private action:string;
@@ -483,10 +479,14 @@ class Table{
             }
             // hitなどアクション後にcountingを開始
             turnPlayer.cheatCounting(this)
-            console.log(turnPlayer.getName + "Count -> " + `${turnPlayer.getCounting}` + " allPlayerCounting -> " + `${this.getAllPlayerCounting}`) 
+            console.log(turnPlayer.getName + "Count -> " + `${turnPlayer.getCounting}` + " allPlayerCounting -> " + `${this.getAllPlayerCounting}`)
         }
         else if(this.gamePhase === "roundOver"){
-            turnPlayer.setCounting = 0
+            this.players.forEach((player) => {
+                player.setCounting = 0
+            })
+            this.house.setCounting = 0
+            this.allPlayerCounting = 0
             this.gamePhase = "betting";
             this.house.setGameStatus = "Waiting for bets";
             this.turnCounter = 0;
@@ -1095,6 +1095,7 @@ class View{
         div.innerHTML += 
             `
             <p>All Player Counting -> ${table.getAllPlayerCounting}</p>
+            <p>Dealer Counting -> ${table.getHouse.getCounting}</p>
             `   
         table.getPlayers.forEach((player) => {
             div.innerHTML += 

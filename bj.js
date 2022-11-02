@@ -208,13 +208,8 @@ var Player = /** @class */ (function () {
     Player.prototype.cheatCounting = function (table) {
         var _this = this;
         // countingの初期化
-        if (table.getTurnCounter % 4 === 0) {
-            table.getPlayers.forEach(function (player) {
-                player.setCounting = 0;
-            });
-            table.getHouse.setCounting = 0;
-            table.setAllPlayerCounting = 0;
-        }
+        table.setAllPlayerCounting = table.getAllPlayerCounting - this.getCounting;
+        this.setCounting = 0;
         var countingHashmap = {
             "10": -1,
             "J": -1,
@@ -558,7 +553,11 @@ var Table = /** @class */ (function () {
             console.log(turnPlayer.getName + "Count -> " + "".concat(turnPlayer.getCounting) + " allPlayerCounting -> " + "".concat(this.getAllPlayerCounting));
         }
         else if (this.gamePhase === "roundOver") {
-            turnPlayer.setCounting = 0;
+            this.players.forEach(function (player) {
+                player.setCounting = 0;
+            });
+            this.house.setCounting = 0;
+            this.allPlayerCounting = 0;
             this.gamePhase = "betting";
             this.house.setGameStatus = "Waiting for bets";
             this.turnCounter = 0;
@@ -1099,7 +1098,7 @@ var View = /** @class */ (function () {
         var div = document.createElement("div");
         div.classList.add("text-white", "w-300");
         div.innerHTML +=
-            "\n            <p>All Player Counting -> ".concat(table.getAllPlayerCounting, "</p>\n            ");
+            "\n            <p>All Player Counting -> ".concat(table.getAllPlayerCounting, "</p>\n            <p>Dealer Counting -> ").concat(table.getHouse.getCounting, "</p>\n            ");
         table.getPlayers.forEach(function (player) {
             div.innerHTML +=
                 "\n                <p>".concat(player.getName, "'s counting -> ").concat(player.getCounting, "</p>\n                ");

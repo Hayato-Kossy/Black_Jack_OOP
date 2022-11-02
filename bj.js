@@ -99,23 +99,13 @@ var Player = /** @class */ (function () {
         this.bet = 0;
         this.winAmount = 0;
         this.playerScore = this.getHandScore;
+        this.counting = 0;
     }
     //NOTE戻り値のデータ型が抽象的すぎる
     Player.prototype.drawOne = function (table) {
-        if (table.getDeck.isEmpty()) {
-            alert("No cards left. Shuffle the cards.");
-            table.getDeck.pushRemainingCards(table);
-            table.getDeck.shuffle();
-            if (table.getGamePhase != "roundOver")
-                return table.getDeck.getCards.pop();
-            else
-                return null;
-        }
-        else
-            return table.getDeck.getCards.pop();
+        return table.alertIsEmptyAndAction();
     };
     Player.prototype.promptPlayer = function (table, userData) {
-        console.log("done prompt");
         var gameDecision = new GameDecision("", userData);
         if (table.getGamePhase === "betting") {
             if (this.type == "ai")
@@ -158,10 +148,7 @@ var Player = /** @class */ (function () {
         return count;
     };
     Player.prototype.isBlackJack = function () {
-        if (this.getHandScore == 21 && this.hand.length == 2)
-            return true;
-        else
-            return false;
+        return this.getHandScore == 21 && this.hand.length == 2;
     };
     Player.prototype.resetPlayerBet = function () {
         this.chips += this.bet;
@@ -173,7 +160,6 @@ var Player = /** @class */ (function () {
     };
     //確認ずみ
     Player.prototype.getHouseGameDecision = function (table) {
-        console.log("house");
         if (table.allPlayersHitCompleted() && table.allPlayersBetCompleted()) {
             if (this.isBlackJack())
                 return new GameDecision("blackjack", this.bet);
@@ -219,9 +205,49 @@ var Player = /** @class */ (function () {
         }
         return new GameDecision(this.gameStatus, this.bet);
     };
+    Player.prototype.cheatCounting = function (table) {
+        var _this = this;
+        // countingの初期化
+        if (table.getTurnCounter % 4 === 0) {
+            table.getPlayers.forEach(function (player) {
+                player.setCounting = 0;
+            });
+            table.getHouse.setCounting = 0;
+            table.setAllPlayerCounting = 0;
+        }
+        var countingHashmap = {
+            "10": -1,
+            "J": -1,
+            "Q": -1,
+            "K": -1,
+            "A": -1,
+            "7": 0,
+            "8": 0,
+            "9": 0,
+        };
+        if (this.getType === "house") {
+            if (this.hand[0].getRank in countingHashmap) {
+                this.counting += countingHashmap[this.hand[0].getRank];
+                table.setAllPlayerCounting = table.getAllPlayerCounting + countingHashmap[this.hand[0].getRank];
+            }
+            else {
+                this.counting += 1;
+                table.setAllPlayerCounting = table.getAllPlayerCounting + 1;
+            }
+        }
+        else
+            this.hand.forEach(function (card) {
+                if (card.getRank in countingHashmap) {
+                    _this.counting += countingHashmap[card.getRank];
+                    table.setAllPlayerCounting = table.getAllPlayerCounting + countingHashmap[card.getRank];
+                }
+                else {
+                    _this.counting += 1;
+                    table.setAllPlayerCounting = table.getAllPlayerCounting + 1;
+                }
+            });
+    };
     Player.prototype.getUserGameDecision = function (userData) {
-        // console.log(`${this.getType}` + `${userData}`)
-        var gameDecision = new GameDecision("", -1);
         if (this.isBlackJack()) {
             return new GameDecision("blackjack", this.bet);
         }
@@ -351,6 +377,20 @@ var Player = /** @class */ (function () {
     Player.prototype.randomIntInRange = function (min, max) {
         return Math.floor(Math.random() * (max - min) + min);
     };
+    Object.defineProperty(Player.prototype, "getCounting", {
+        get: function () {
+            return this.counting;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Player.prototype, "setCounting", {
+        set: function (count) {
+            this.counting = count;
+        },
+        enumerable: false,
+        configurable: true
+    });
     return Player;
 }());
 var GameDecision = /** @class */ (function () {
@@ -400,34 +440,32 @@ var Table = /** @class */ (function () {
         this.gamePhase = "betting";
         this.resultLog = [];
         this.turnCounter = 0;
+        this.isCardClosed = false;
+        this.allPlayerCounting = 0;
     }
     Object.defineProperty(Table.prototype, "setPlayers", {
         set: function (userName) {
-            this.players.push(new Player("AI1", "ai", this.gameType));
-            this.players.push(new Player(userName, "user", this.gameType));
-            this.players.push(new Player("AI2", "ai", this.gameType));
+            this.players.push(new Player("AI1", "ai", this.gameType), new Player(userName, "user", this.gameType), new Player("AI2", "ai", this.gameType));
         },
         enumerable: false,
         configurable: true
     });
     Table.prototype.cardIsOnTable = function (suit, rank) {
-        var flag = false;
         var houseHand = this.house.getHand;
         this.players.forEach(function (player) {
             var playerHand = player.getHand;
             playerHand.forEach(function (card) {
                 if (card.getSuit == suit && card.getRank == rank)
-                    return !flag;
+                    return true;
             });
         });
         houseHand.forEach(function (card) {
             if (card.getSuit == suit && card.getRank == rank)
-                return !flag;
+                return true;
         });
-        return flag;
+        return false;
     };
     Table.prototype.evaluateMove = function (gameDecision, player) {
-        // console.log("done evaluate")
         player.setGameStatus = gameDecision.getAction;
         player.setBet = gameDecision.getAmount;
         switch (gameDecision.getAction) {
@@ -493,7 +531,7 @@ var Table = /** @class */ (function () {
         this.house.setGameStatus = "betting";
     };
     Table.prototype.haveTurn = function (userData) {
-        // console.log("done haveturn")
+        console.log(this.getAllPlayerCounting);
         var turnPlayer = this.getTurnPlayer();
         if (this.gamePhase === "betting") {
             if (turnPlayer.getType === "house") {
@@ -515,8 +553,12 @@ var Table = /** @class */ (function () {
             else {
                 this.evaluateMove(turnPlayer.promptPlayer(this, userData), turnPlayer);
             }
+            // hitなどアクション後にcountingを開始
+            turnPlayer.cheatCounting(this);
+            console.log(turnPlayer.getName + "Count -> " + "".concat(turnPlayer.getCounting) + " allPlayerCounting -> " + "".concat(this.getAllPlayerCounting));
         }
         else if (this.gamePhase === "roundOver") {
+            turnPlayer.setCounting = 0;
             this.gamePhase = "betting";
             this.house.setGameStatus = "Waiting for bets";
             this.turnCounter = 0;
@@ -529,11 +571,8 @@ var Table = /** @class */ (function () {
     };
     Table.prototype.allPlayersHitCompleted = function () {
         for (var i = 0; i < this.players.length; i++) {
-            if (this.players[i].getGameStatus == "hit") {
-                console.log("False");
+            if (this.players[i].getGameStatus == "hit")
                 return false;
-            }
-            ;
         }
         console.log("True");
         return true;
@@ -606,8 +645,10 @@ var Table = /** @class */ (function () {
                 else
                     player.setWinAmount = player.getBet;
         }
-        if (result === "lose" || player.getGameStatus === "bust" || player.getGameStatus === "surrender")
+        if (result === "lose" || player.getGameStatus === "bust")
             player.setWinAmount = player.getBet * -1;
+        if (player.getGameStatus === "surrender")
+            player.setWinAmount = player.getBet * -0.5;
         if (result != "push")
             player.setChips = player.getChips + player.getWinAmount;
         if (player.getGameStatus != "blackjack")
@@ -626,13 +667,9 @@ var Table = /** @class */ (function () {
     };
     Table.prototype.allPlayersBetCompleted = function () {
         for (var i = 0; i < this.players.length; i++) {
-            if (this.players[i].getGameStatus == "bet") {
-                console.log("False");
+            if (this.players[i].getGameStatus == "bet")
                 return false;
-            }
-            ;
         }
-        console.log("True");
         return true;
     };
     Table.prototype.houseActionCompleted = function () {
@@ -651,6 +688,17 @@ var Table = /** @class */ (function () {
             return this.house;
         else
             return this.players[index - 1];
+    };
+    Table.prototype.alertIsEmptyAndAction = function () {
+        if (this.deck.isEmpty()) {
+            alert("No cards left. Shuffle the cards.");
+            this.getDeck.pushRemainingCards(this);
+            this.getDeck.shuffle();
+            if (this.getGamePhase != "roundOver")
+                return this.getDeck.getCards.pop();
+        }
+        else
+            return this.getDeck.getCards.pop();
     };
     Object.defineProperty(Table.prototype, "getGamePhase", {
         get: function () {
@@ -708,6 +756,48 @@ var Table = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
+    Object.defineProperty(Table.prototype, "getGameType", {
+        get: function () {
+            return this.gameType;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Table.prototype, "getIsCardClosed", {
+        get: function () {
+            return this.isCardClosed;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Table.prototype, "setIsCardClosed", {
+        set: function (state) {
+            this.isCardClosed = state;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Table.prototype, "getTurnCounter", {
+        get: function () {
+            return this.turnCounter;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Table.prototype, "getAllPlayerCounting", {
+        get: function () {
+            return this.allPlayerCounting;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(Table.prototype, "setAllPlayerCounting", {
+        set: function (counting) {
+            this.allPlayerCounting = counting;
+        },
+        enumerable: false,
+        configurable: true
+    });
     return Table;
 }());
 var Controller = /** @class */ (function () {
@@ -719,25 +809,28 @@ var Controller = /** @class */ (function () {
         startGameBtn.addEventListener("click", function () {
             var userName = View.config.gamePage.querySelectorAll("input")[0].value;
             var table = new Table(View.config.loginPage.querySelectorAll("select")[0].value);
-            if (userName == "") {
+            if (userName === "") {
                 alert("Please put your name");
             }
             else {
-                Controller.changePageAndSetPlayer(table, userName);
+                Controller.changePageAndSetPlayer(table, userName, table.getGameType);
             }
         });
     };
-    Controller.changePageAndSetPlayer = function (table, userName) {
+    Controller.changePageAndSetPlayer = function (table, userName, gameType) {
         View.displayNone(View.config.loginPage);
         View.displayBlock(View.config.mainPage);
         table.setPlayers = userName;
-        table.blackjackAssignPlayerHands();
-        Controller.controlTable(table);
+        if (gameType === "blackjack") {
+            table.blackjackAssignPlayerHands();
+            Controller.controlTable(table);
+        }
     };
-    //動作確認済み
     Controller.controlTable = function (table) {
         View.renderTable(table);
         var player = table.getTurnPlayer();
+        if (table.getGamePhase !== "betting")
+            View.renderAllCountingLog(table);
         if (player.getType === "user" && table.getGamePhase === "betting") {
             table.haveTurn(player.getBet);
             View.renderBetInfo(table);
@@ -799,7 +892,7 @@ var View = /** @class */ (function () {
         View.config.loginPage.innerHTML = '';
         var container = document.createElement("div");
         container.innerHTML =
-            "\n        <p class=\"text-white\">Welcome to Card Game!</p>\n        <div class=\"my-2\">\n            <input type=\"text\" placeholder=\"name\" value=\"\">\n        </div>\n        <div class=\"my-2\">\n            <select class=\"w-100\">\n                <option value=\"blackjack\">Blackjack </option>\n                <option value=\"poker\">Poker </option>\n            </select>\n        </div>\n        <div class=\"my-2\">\n            <button type=\"submit\" class=\"btn btn-success\" id=\"startGame\">Start Game</button>\n        <div>\n        ";
+            "\n        <p class=\"text-white\">Welcome to Card Game!</p>\n        <div class=\"my-2\">\n            <input type=\"text\" placeholder=\"name\" value=\"\">\n        </div>\n        <div class=\"my-2\">\n            <select class=\"w-100\">\n                <option value=\"blackjack\">Blackjack</option>\n            </select>\n        </div>\n        <div class=\"my-2\">\n            <button type=\"submit\" class=\"btn btn-success\" id=\"startGame\">Start Game</button>\n        <div>\n        ";
         View.config.loginPage.append(container);
     };
     View.disableBtnAfterFirstAction = function () {
@@ -813,16 +906,15 @@ var View = /** @class */ (function () {
         var container = document.createElement("div");
         container.classList.add("col-12", "d-flex", "flex-column");
         container.innerHTML =
-            "\n            <div id=\"houesCardDiv\" class=\"pt-5\">\n            </div>\n    \n            <!-- Players Div -->\n            <div id=\"playersDiv\" class=\"d-flex m-3 justify-content-center\">\n            </div><!-- end players -->  \n            <!-- actionsAndBetsDiv -->\n            <div id=\"actionsAndBetsDiv\" class=\"d-flex pb-5 pt-4 d-flex flex-column align-items-center\">\n                <!-- betsDiv -->\n                <div id=\"betsDiv\" class=\"d-flex flex-column w-50 col-3\">\n                </div><!-- end betsDiv-->\n            </div><!-- end actionsAndBetsDiv-->\n            <div id=\"resultLogDiv\" class=\"d-flex pb-5 pt-4 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            </div>\n        ";
+            "\n            <div class=\"d-flex pb-5 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            <h1>BlackJack</h1>\n            </div>\n            <div id=\"houesCardDiv\" class=\"pt-5\"></div>\n            <div id=\"playersDiv\" class=\"d-flex m-3 justify-content-center\"></div>\n            <div id=\"actionsAndBetsDiv\" class=\"d-flex d-flex flex-column align-items-center\">\n                <div id=\"betsDiv\" class=\"d-flex flex-column w-50 col-3\"></div> \n            </div>\n            <div id=\"countingLog\" class=\"d-flex pb-5 justify-content-center text-white overflow-autostyle=\"max-height: 120px;\">\n            </div>\n            <div id=\"resultLogDiv\" class=\"d-flex pb-5 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            </div>\n        ";
         View.config.mainPage.append(container);
         View.renderHouseStatusPage(table);
         View.renderPlayerStatusPage(table);
-        var isMask;
         if (table.getGamePhase != "betting")
-            isMask = false;
+            table.setIsCardClosed = false;
         else
-            isMask = true;
-        View.renderCards(table, isMask);
+            table.setIsCardClosed = true;
+        View.renderCards(table, table.getIsCardClosed);
     };
     View.renderBetInfo = function (table) {
         var betDiv = document.getElementById("betsDiv");
@@ -830,7 +922,7 @@ var View = /** @class */ (function () {
             return player.getType === "user";
         })[0];
         betDiv.innerHTML +=
-            " \n        <p class=\"m-0 text-center text-white rem3\">Bet: $".concat(user.getBet, "</p>\n        <p class=\"m-0 text-center text-white rem2\">Current Money: $").concat(user.getChips, "</p>\n        ");
+            " \n            <p class=\"m-0 text-center text-white rem3\">Bet: $".concat(user.getBet, "</p>\n            <p class=\"m-0 text-center text-white rem2\">Current Money: $").concat(user.getChips, "</p>\n        ");
     };
     View.updatePlayerInfo = function (table) {
         var houesCardDiv = document.getElementById("houesCardDiv");
@@ -843,17 +935,12 @@ var View = /** @class */ (function () {
     View.renderBetBtn = function (table) {
         var betsDiv = document.getElementById("betsDiv");
         var betBtnDiv = document.createElement("div");
-        var colerHash = {
-            5: "btn-danger",
-            20: "btn-primary",
-            50: "btn-success",
-            100: "btn-dark"
-        };
+        var colorHash = { 5: "btn-danger", 20: "btn-primary", 50: "btn-success", 100: "btn-dark" };
         betBtnDiv.classList.add("py-2", "h-60", "d-flex", "justify-content-between");
         for (var i = 0; i < table.getBetDenominations.length; i++) {
             var bet = table.getBetDenominations[i];
             betBtnDiv.innerHTML +=
-                "\n            <div>\n                <div class=\"input-group\" >\n                    <span class=\"input-group-btn\">\n                        <button type=\"button\" class=\"btn ".concat(colerHash[bet], " rounded-circle p-0 btn-lg\" style=\"width:3rem;height:3rem;\" id=\"betValue\" value=").concat(bet, ">").concat(bet, "</button>\n                    </span>\n                </div>\n            </div>\n            ");
+                "\n            <div>\n                <div class=\"input-group\" >\n                    <span class=\"input-group-btn\">\n                        <button type=\"button\" class=\"btn ".concat(colorHash[bet], " rounded-circle p-0 btn-lg\" style=\"width:3rem;height:3rem;\" id=\"betValue\" value=").concat(bet, ">").concat(bet, "</button>\n                    </span>\n                </div>\n            </div>\n            ");
         }
         var dealResetDiv = document.createElement("div");
         dealResetDiv.classList.add("d-flex", "justify-content-between", "m-2");
@@ -893,13 +980,12 @@ var View = /** @class */ (function () {
             View.renderBetBtn(table);
         });
     };
-    //動作確認済み
     View.renderHouseStatusPage = function (table) {
         var houesCardDiv = document.getElementById("houesCardDiv");
         houesCardDiv.innerHTML = '';
         var houseCardsDiv = table.getHouse.getName + "CardsDiv";
         houesCardDiv.innerHTML +=
-            "\n        <p class=\"m-0 text-center text-white rem3\">".concat(table.getHouse.getName, "</p>\n        <div class=\"text-white d-flex m-0 p-0 flex-column justify-content-center align-items-center\">\n            <p class=\"rem1 text-left\">Status:").concat(table.getHouse.getGameStatus, "&nbsp</a>\n        </div>\n            <!-- House Card Row -->\n        <div id=").concat(houseCardsDiv, " class=\"d-flex justify-content-center pt-3 pb-2\">   \n        </div>\n        ");
+            "\n        <p class=\"m-0 text-center text-white pt-2 rem3\">".concat(table.getHouse.getName, "</p>\n        <div class=\"text-white d-flex m-0 p-0 flex-column justify-content-center align-items-center\">\n            <p class=\"rem1 text-left\">Status:").concat(table.getHouse.getGameStatus, "&nbsp</a>\n        </div>\n        <div id=").concat(houseCardsDiv, " class=\"d-flex justify-content-center pb-2\">   \n        </div>\n        ");
     };
     View.renderPlayerStatusPage = function (table) {
         var playersDiv = document.getElementById("playersDiv");
@@ -909,17 +995,17 @@ var View = /** @class */ (function () {
             var playerDiv = player.getName + "PlayerDiv";
             var cardsDiv = player.getName + "CardsDiv";
             playersDiv.innerHTML +=
-                "\n            <div id=".concat(playerDiv, " class=\"d-flex flex-column w-50\">\n                <p class=\"m-0 text-white text-center rem3\">").concat(player.getName, "</p>\n    \n                <!-- playerInfoDiv -->\n                <div class=\"text-white d-flex m-0 p-0 flex-column justify-content-center align-items-center\">\n                    <p class=\"rem1 text-left\">Status:").concat(player.getGameStatus, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Bet:").concat(player.getBet, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Chips:").concat(player.getChips, "&nbsp</a>\n                </div>\n    \n                <!-- cardsDiv -->\n                <div id=").concat(cardsDiv, " class=\"d-flex justify-content-center\">\n                </div><!-- end Cards -->\n            </div><!-- end player -->        \n            ");
+                "\n            <div id=".concat(playerDiv, " class=\"d-flex flex-column w-50\">\n                <p class=\"m-0 text-white text-center rem2\">").concat(player.getName, "</p>\n                    <div class=\"text-white d-flex flex-column justify-content-center align-items-center\">\n                    <p class=\"rem1 text-left\">Status:").concat(player.getGameStatus, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Bet:").concat(player.getBet, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Chips:").concat(player.getChips, "&nbsp</a>\n                </div>\n                <div id=").concat(cardsDiv, " class=\"d-flex justify-content-center\">\n                </div>\n            </div> \n            ");
         });
     };
-    View.renderCardDiv = function (card, ele, isMask) {
+    View.renderCardDiv = function (card, ele, isCardClosed) {
         var targetElement = document.getElementById(ele);
-        var suit = isMask ? "?" : card.getSuit;
-        var rank = isMask ? "?" : card.getRank;
+        var suit = isCardClosed ? "?" : card.getSuit;
+        var rank = isCardClosed ? "?" : card.getRank;
         targetElement.innerHTML +=
-            "\n        <div class=\"bg-white border rounded mx-2\">\n            <div class=\"text-center\">\n                <img src=".concat(View.config.suitImgURL[suit], " alt=\"\" width=\"50\" height=\"50\">\n            </div>\n            <div class=\"text-center\">\n                <p class=\"m-0 \">").concat(rank, "</p>\n            </div>\n        </div>\n        ");
+            "\n        <div class=\"bg-white border rounded mx-2\">\n            <div class=\"text-center\">\n                <img src=".concat(View.suitImgURL[suit], " alt=\"\" width=\"50\" height=\"50\">\n            </div>\n            <div class=\"text-center\">\n                <p class=\"m-0 \">").concat(rank, "</p>\n            </div>\n        </div>\n        ");
     };
-    View.renderCards = function (table, flag) {
+    View.renderCards = function (table, isCardClosed) {
         var allPlayers = table.getPlayers;
         var house = table.getHouse;
         var houseCardsDiv = house.getName + "CardsDiv";
@@ -929,11 +1015,11 @@ var View = /** @class */ (function () {
             View.renderCardDiv(houseCards[1], houseCardsDiv, true);
         }
         else {
-            houseCards.forEach(function (card) { View.renderCardDiv(card, houseCardsDiv, flag); });
+            houseCards.forEach(function (card) { View.renderCardDiv(card, houseCardsDiv, isCardClosed); });
         }
         allPlayers.forEach(function (player) {
             player.getHand.forEach(function (card) {
-                View.renderCardDiv(card, player.getName + "CardsDiv", flag);
+                View.renderCardDiv(card, player.getName + "CardsDiv", isCardClosed);
             });
         });
     };
@@ -957,7 +1043,6 @@ var View = /** @class */ (function () {
             actionBtn.addEventListener("click", function () {
                 table.haveTurn(action);
                 Controller.controlTable(table);
-                // console.log(action)
             });
         });
     };
@@ -992,7 +1077,7 @@ var View = /** @class */ (function () {
     View.renderLogResult = function (table) {
         var resultLogDiv = document.getElementById("resultLogDiv");
         var div = document.createElement("div");
-        div.classList.add("text-white", "w-50");
+        div.classList.add("text-white", "w-300");
         div.innerHTML +=
             "\n        <p>rounnd ".concat(table.getResultLog.length + 1, "</p>\n        ");
         div.append(table.blackjackEvaluateAndGetRoundResults());
@@ -1001,13 +1086,25 @@ var View = /** @class */ (function () {
     View.renderAllLog = function (table) {
         var resultLogDiv = document.getElementById("resultLogDiv");
         var div = document.createElement("div");
-        div.classList.add("text-white", "w-50");
+        div.classList.add("text-white", "w-300");
         for (var i = 0; i < table.getResultLog.length; i++) {
             div.innerHTML +=
                 "\n            <p>rounnd ".concat(i + 1, "</p>\n            ");
             div.append(table.getResultLog[i]);
         }
         resultLogDiv.append(div);
+    };
+    View.renderAllCountingLog = function (table) {
+        var countingLog = document.getElementById("countingLog");
+        var div = document.createElement("div");
+        div.classList.add("text-white", "w-300");
+        div.innerHTML +=
+            "\n            <p>All Player Counting -> ".concat(table.getAllPlayerCounting, "</p>\n            ");
+        table.getPlayers.forEach(function (player) {
+            div.innerHTML +=
+                "\n                <p>".concat(player.getName, "'s counting -> ").concat(player.getCounting, "</p>\n                ");
+        });
+        countingLog.append(div);
     };
     View.renderGameOver = function () {
         var actionsAndBetsDiv = document.getElementById("actionsAndBetsDiv");
@@ -1020,17 +1117,12 @@ var View = /** @class */ (function () {
             Controller.startGame();
         });
     };
+    View.suitImgURL = { "S": "https://recursionist.io/img/spade.png", "H": "https://recursionist.io/img/heart.png", "C": "https://recursionist.io/img/clover.png", "D": "https://recursionist.io/img/diamond.png", "?": "https://recursionist.io/img/questionMark.png"
+    };
     View.config = {
         gamePage: document.getElementById("gameDiv"),
         loginPage: document.getElementById("loginPage"),
         mainPage: document.getElementById("mainPage"),
-        suitImgURL: {
-            "S": "https://recursionist.io/img/spade.png",
-            "H": "https://recursionist.io/img/heart.png",
-            "C": "https://recursionist.io/img/clover.png",
-            "D": "https://recursionist.io/img/diamond.png",
-            "?": "https://recursionist.io/img/questionMark.png"
-        }
     };
     return View;
 }());

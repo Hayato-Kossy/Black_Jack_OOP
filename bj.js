@@ -1,3 +1,16 @@
+var strategy = [
+    ["hit", "hit", "hit", "hit", "hit", "hit", "hit", "hit", "hit", "hit"],
+    ["hit", "double", "double", "double", "double", "hit", "hit", "hit", "hit", "hit"],
+    ["double", "double", "double", "double", "double", "double", "double", "double", "hit", "hit"],
+    ["double", "double", "double", "double", "double", "double", "double", "double", "double", "hit"],
+    ["hit", "hit", "stand", "stand", "stand", "hit", "hit", "hit", "hit", "hit"],
+    ["stand", "stand", "stand", "stand", "stand", "hit", "hit", "hit", "hit", "hit"],
+    ["stand", "stand", "stand", "stand", "stand", "hit", "hit", "hit", "hit", "hit"],
+    ["stand", "stand", "stand", "stand", "stand", "hit", "hit", "hit", "hit", "hit"],
+    ["stand", "stand", "stand", "stand", "stand", "hit", "hit", "hit", "surrender", "hit"],
+    ["stand", "stand", "stand", "stand", "stand", "hit", "hit", "surrender", "surrender", "surrender"],
+    ["stand", "stand", "stand", "stand", "stand", "stand", "stand", "stand", "stand", "stand",]
+];
 var Card = /** @class */ (function () {
     function Card(suit, rank) {
         this.suit = suit;
@@ -100,8 +113,8 @@ var Player = /** @class */ (function () {
         this.winAmount = 0;
         this.playerScore = this.getHandScore;
         this.counting = 0;
+        this.recomendation = "";
     }
-    //NOTE戻り値のデータ型が抽象的すぎる
     Player.prototype.drawOne = function (table) {
         return table.alertIsEmptyAndAction();
     };
@@ -173,13 +186,13 @@ var Player = /** @class */ (function () {
     };
     Player.prototype.getAiBetDecision = function (table) {
         var _this = this;
-        if (table.getTurnPlayer().getGameStatus == "game over") {
+        if (table.getTurnPlayer.getGameStatus == "game over") {
             return new GameDecision("game over", 0);
         }
         else {
             var availableBet = table.getBetDenominations.filter(function (bet) { return (bet <= _this.chips); });
             var betAmount = availableBet[this.randomIntInRange(0, availableBet.length)];
-            table.getTurnPlayer().bet = betAmount;
+            table.getTurnPlayer.bet = betAmount;
             return new GameDecision("bet", betAmount);
         }
     };
@@ -190,12 +203,12 @@ var Player = /** @class */ (function () {
             return new GameDecision("blackjack", this.bet);
         }
         else if (this.gameStatus === "bet") {
-            if (gameDecision.getAction == "double" && table.getTurnPlayer().chips < table.getTurnPlayer().bet * 2) {
+            if (gameDecision.getAction == "double" && table.getTurnPlayer.chips < table.getTurnPlayer.bet * 2) {
                 gameDecision.setAction = "hit";
                 return new GameDecision("hit", this.bet);
             }
             else if (gameDecision.getAction == "double")
-                table.getTurnPlayer().setBet = table.getTurnPlayer().getBet * 2;
+                table.getTurnPlayer.setBet = table.getTurnPlayer.getBet * 2;
             else
                 return new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
@@ -241,6 +254,17 @@ var Player = /** @class */ (function () {
                     table.setAllPlayerCounting = table.getAllPlayerCounting + 1;
                 }
             });
+    };
+    Player.prototype.recomendationAction = function (table) {
+        // if (table.getTurnPlayer.getType !== "user") return "hit"
+        console.log(table.getTurnPlayer.getHandScore);
+        var userScore = table.getTurnPlayer.getHandScore;
+        if (userScore < 8)
+            return "hit";
+        if (userScore >= 17)
+            return "stand";
+        var houseScore = table.getHouse.getHand[0].getRankNumber;
+        return strategy[userScore - 8][houseScore - 2];
     };
     Player.prototype.getUserGameDecision = function (userData) {
         if (this.isBlackJack()) {
@@ -386,6 +410,16 @@ var Player = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
+    Object.defineProperty(Player.prototype, "getRecomendation", {
+        get: function () {
+            return this.recomendation;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Player.prototype.setRecomendation = function (recomendation) {
+        this.recomendation = recomendation;
+    };
     return Player;
 }());
 var GameDecision = /** @class */ (function () {
@@ -526,8 +560,7 @@ var Table = /** @class */ (function () {
         this.house.setGameStatus = "betting";
     };
     Table.prototype.haveTurn = function (userData) {
-        console.log(this.getAllPlayerCounting);
-        var turnPlayer = this.getTurnPlayer();
+        var turnPlayer = this.getTurnPlayer;
         if (this.gamePhase === "betting") {
             if (turnPlayer.getType === "house") {
                 this.house.setGameStatus = "Waiting for bets";
@@ -681,13 +714,17 @@ var Table = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
-    Table.prototype.getTurnPlayer = function () {
-        var index = this.turnCounter % (this.players.length + 1);
-        if (index === 0)
-            return this.house;
-        else
-            return this.players[index - 1];
-    };
+    Object.defineProperty(Table.prototype, "getTurnPlayer", {
+        get: function () {
+            var index = this.turnCounter % (this.players.length + 1);
+            if (index === 0)
+                return this.house;
+            else
+                return this.players[index - 1];
+        },
+        enumerable: false,
+        configurable: true
+    });
     Table.prototype.alertIsEmptyAndAction = function () {
         if (this.deck.isEmpty()) {
             alert("No cards left. Shuffle the cards.");
@@ -827,9 +864,11 @@ var Controller = /** @class */ (function () {
     };
     Controller.controlTable = function (table) {
         View.renderTable(table);
-        var player = table.getTurnPlayer();
-        if (table.getGamePhase !== "betting")
+        var player = table.getTurnPlayer;
+        if (table.getGamePhase !== "betting") {
             View.renderAllCountingLog(table);
+            View.renderRecomendation(table);
+        }
         if (player.getType === "user" && table.getGamePhase === "betting") {
             table.haveTurn(player.getBet);
             View.renderBetInfo(table);
@@ -905,7 +944,7 @@ var View = /** @class */ (function () {
         var container = document.createElement("div");
         container.classList.add("col-12", "d-flex", "flex-column");
         container.innerHTML =
-            "\n            <div class=\"d-flex pb-5 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            <h1>BlackJack</h1>\n            </div>\n            <div id=\"houesCardDiv\" class=\"pt-5\"></div>\n            <div id=\"playersDiv\" class=\"d-flex m-3 justify-content-center\"></div>\n            <div id=\"actionsAndBetsDiv\" class=\"d-flex d-flex flex-column align-items-center\">\n                <div id=\"betsDiv\" class=\"d-flex flex-column w-50 col-3\"></div> \n            </div>\n            <div id=\"countingLog\" class=\"d-flex pb-5 justify-content-center text-white overflow-autostyle=\"max-height: 120px;\">\n            </div>\n            <div id=\"resultLogDiv\" class=\"d-flex pb-5 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            </div>\n        ";
+            "\n            <div class=\"d-flex pb-5 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            <h1>BlackJack</h1>\n            </div>\n            <div id=\"houesCardDiv\" class=\"pt-5\"></div>\n            <div id=\"playersDiv\" class=\"d-flex m-3 justify-content-center\"></div>\n            <div id=\"actionsAndBetsDiv\" class=\"d-flex d-flex flex-column align-items-center\">\n                <div id=\"betsDiv\" class=\"d-flex flex-column w-50 col-3\"></div> \n            </div>\n            <div id=\"countingLog\" class=\"d-flex pb-1 justify-content-center text-white overflow-auto style=\"max-height: 120px;\">\n            </div>\n            <div id=\"recomendation\" class=\"d-flex justify-content-center text-white overflow-auto style=\"max-height: 120px;\">\n            </div>\n            <div id=\"resultLogDiv\" class=\"d-flex pb-5 justify-content-center text-white overflow-auto\" style=\"max-height: 120px;\">\n            </div>\n        ";
         View.config.mainPage.append(container);
         View.renderHouseStatusPage(table);
         View.renderPlayerStatusPage(table);
@@ -994,7 +1033,7 @@ var View = /** @class */ (function () {
             var playerDiv = player.getName + "PlayerDiv";
             var cardsDiv = player.getName + "CardsDiv";
             playersDiv.innerHTML +=
-                "\n            <div id=".concat(playerDiv, " class=\"d-flex flex-column w-50\">\n                <p class=\"m-0 text-white text-center rem2\">").concat(player.getName, "</p>\n                    <div class=\"text-white d-flex flex-column justify-content-center align-items-center\">\n                    <p class=\"rem1 text-left\">Status:").concat(player.getGameStatus, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Bet:").concat(player.getBet, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Chips:").concat(player.getChips, "&nbsp</a>\n                </div>\n                <div id=").concat(cardsDiv, " class=\"d-flex justify-content-center\">\n                </div>\n            </div> \n            ");
+                "\n            <div id=".concat(playerDiv, " class=\"d-flex flex-column w-50\">\n                <p class=\"m-0 text-white text-center rem3\">").concat(player.getName, "</p>\n                    <div class=\"text-white d-flex flex-column justify-content-center align-items-center\">\n                    <p class=\"rem1 text-left\">Status:").concat(player.getGameStatus, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Bet:").concat(player.getBet, "&nbsp</a>\n                    <p class=\"rem1 text-left\">Chips:").concat(player.getChips, "&nbsp</a>\n                </div>\n                <div id=").concat(cardsDiv, " class=\"d-flex justify-content-center\">\n                </div>\n            </div> \n            ");
         });
     };
     View.renderCardDiv = function (card, ele, isCardClosed) {
@@ -1088,7 +1127,7 @@ var View = /** @class */ (function () {
         div.classList.add("text-white", "w-300");
         for (var i = 0; i < table.getResultLog.length; i++) {
             div.innerHTML +=
-                "\n            <p>rounnd ".concat(i + 1, "</p>\n            ");
+                "\n            <p class=\"h3\">rounnd ".concat(i + 1, "</p>\n            ");
             div.append(table.getResultLog[i]);
         }
         resultLogDiv.append(div);
@@ -1098,11 +1137,26 @@ var View = /** @class */ (function () {
         var div = document.createElement("div");
         div.classList.add("text-white", "w-300");
         div.innerHTML +=
-            "\n            <p>All Player Counting -> ".concat(table.getAllPlayerCounting, "</p>\n            <p>Dealer Counting -> ").concat(table.getHouse.getCounting, "</p>\n            ");
-        table.getPlayers.forEach(function (player) {
-            div.innerHTML +=
-                "\n                <p>".concat(player.getName, "'s counting -> ").concat(player.getCounting, "</p>\n                ");
-        });
+            "\n            <p class=\"h3\">All Player Counting -> ".concat(table.getAllPlayerCounting, "</p>\n            ");
+        // <p>Dealer Counting -> ${table.getHouse.getCounting}</p>
+        // 各プレイヤーのカウンティングはいらない…？
+        // table.getPlayers.forEach((player) => {
+        //     console.log(player.recomendationAction(table))
+        //     div.innerHTML += 
+        //         `
+        //         <p>${player.getName}'s Counting -> ${player.getCounting}</p>
+        //         `
+        // })
+        countingLog.append(div);
+    };
+    // <p>${player.recomendationAction(table)}</p> recomendation
+    View.renderRecomendation = function (table) {
+        var countingLog = document.getElementById("recomendation");
+        var div = document.createElement("div");
+        div.classList.add("text-white", "w-300");
+        var userData = table.getPlayers.filter(function (user) { return user.getType === "user"; });
+        div.innerHTML +=
+            "\n            <p class=\"h3\">This player's recomended action is ".concat(userData[0].recomendationAction(table), "</p>\n            ");
         countingLog.append(div);
     };
     View.renderGameOver = function () {

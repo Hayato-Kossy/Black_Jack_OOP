@@ -1,3 +1,17 @@
+const strategy = [
+    ["hit","hit","hit","hit","hit","hit","hit","hit","hit","hit"],
+    ["hit","double","double","double","double","hit","hit","hit","hit","hit"],
+    ["double","double","double","double","double","double","double","double","hit","hit"],
+    ["double","double","double","double","double","double","double","double","double","hit"],
+    ["hit","hit","stand","stand","stand","hit","hit","hit","hit","hit"],
+    ["stand","stand","stand","stand","stand","hit","hit","hit","hit","hit"],
+    ["stand","stand","stand","stand","stand","hit","hit","hit","hit","hit"],
+    ["stand","stand","stand","stand","stand","hit","hit","hit","hit","hit"],
+    ["stand","stand","stand","stand","stand","hit","hit","hit","surrender","hit"],
+    ["stand","stand","stand","stand","stand","hit","hit","surrender","surrender","surrender"],
+    ["stand","stand","stand","stand","stand","stand","stand","stand","stand","stand",]
+]
+
 class Card
 {
     private suit:string;
@@ -83,6 +97,7 @@ class Player{
     private gameStatus:string = "betting";
     private gameResult:string = "";
     private counting:number;
+    private recomendation:string;
     constructor(private name:string, private type:string,private gameType:string,private chips = 400
     ){
         this.name = name;
@@ -94,9 +109,9 @@ class Player{
         this.winAmount = 0;
         this.playerScore = this.getHandScore;
         this.counting = 0
+        this.recomendation = ""
     }
 
-    //NOTE戻り値のデータ型が抽象的すぎる
     public drawOne(table:Table):Card | undefined{
         return table.alertIsEmptyAndAction()
     }
@@ -162,13 +177,13 @@ class Player{
     }
 
     private getAiBetDecision(table:Table):GameDecision{
-        if(table.getTurnPlayer().getGameStatus == "game over"){
+        if(table.getTurnPlayer.getGameStatus == "game over"){
             return new GameDecision("game over", 0)
         }
         else{
             let availableBet = table.getBetDenominations.filter(bet=>(bet <= this.chips));
             let betAmount = availableBet[this.randomIntInRange(0, availableBet.length)];
-            table.getTurnPlayer().bet = betAmount;
+            table.getTurnPlayer.bet = betAmount;
 
             return new GameDecision("bet", betAmount);
         }
@@ -181,11 +196,11 @@ class Player{
             return new GameDecision("blackjack", this.bet);
         }
         else if(this.gameStatus === "bet"){
-            if(gameDecision.getAction == "double" && table.getTurnPlayer().chips < table.getTurnPlayer().bet * 2){
+            if(gameDecision.getAction == "double" && table.getTurnPlayer.chips < table.getTurnPlayer.bet * 2){
                 gameDecision.setAction = "hit";
                 return new GameDecision("hit", this.bet);
             }
-            else if(gameDecision.getAction == "double") table.getTurnPlayer().setBet = table.getTurnPlayer().getBet * 2;
+            else if(gameDecision.getAction == "double") table.getTurnPlayer.setBet = table.getTurnPlayer.getBet * 2;
             else return new GameDecision(actionList[this.randomIntInRange(0, actionList.length)], this.bet);
         }
         else if(this.gameStatus === "hit"){
@@ -230,6 +245,16 @@ class Player{
                 table.setAllPlayerCounting = table.getAllPlayerCounting + 1
             } 
         })
+    }
+
+    public recomendationAction(table:Table):string{
+        // if (table.getTurnPlayer.getType !== "user") return "hit"
+        console.log(table.getTurnPlayer.getHandScore)
+        let userScore:number = table.getTurnPlayer.getHandScore;
+        if (userScore < 8) return "hit";
+        if (userScore >= 17) return "stand";
+        let houseScore:number = table.getHouse.getHand[0].getRankNumber;
+        return strategy[userScore - 8][houseScore - 2];
     }
 
     private getUserGameDecision(userData:any):GameDecision{
@@ -319,6 +344,14 @@ class Player{
 
     public set setCounting(count:number){
         this.counting = count;
+    }
+
+    public get getRecomendation():string{
+        return this.recomendation;
+    }
+
+    public setRecomendation(recomendation:string){
+        this.recomendation = recomendation
     }
 }
 
@@ -455,8 +488,7 @@ class Table{
     }
 
     public haveTurn(userData:any):void{
-        console.log(this.getAllPlayerCounting)
-        let turnPlayer:Player = this.getTurnPlayer();
+        let turnPlayer:Player = this.getTurnPlayer;
         if(this.gamePhase === "betting"){
             if(turnPlayer.getType === "house"){
                 this.house.setGameStatus = "Waiting for bets"
@@ -596,7 +628,7 @@ class Table{
         return this.houseActionCompleted() && this.allPlayersHitCompleted();
     }
 
-    public getTurnPlayer():Player{
+    public get getTurnPlayer():Player{
         let index:number = this.turnCounter % (this.players.length + 1);
         if (index === 0) return this.house;
         else return this.players[index - 1];
@@ -611,6 +643,7 @@ class Table{
         }
         else return this.getDeck.getCards.pop();
     }
+
     public get getGamePhase():string{
         return this.gamePhase;
     }
@@ -668,6 +701,7 @@ class Table{
     }
 }
 
+
 class Controller{
 
     static startGame():void{
@@ -697,8 +731,11 @@ class Controller{
 
     static controlTable(table:Table):void{
         View.renderTable(table);
-        let player:Player = table.getTurnPlayer()
-        if (table.getGamePhase !== "betting") View.renderAllCountingLog(table);
+        let player:Player = table.getTurnPlayer
+        if (table.getGamePhase !== "betting") {
+            View.renderAllCountingLog(table);
+            View.renderRecomendation(table);
+        }
         if(player.getType === "user" && table.getGamePhase === "betting"){
             table.haveTurn(player.getBet);
             View.renderBetInfo(table);
@@ -811,7 +848,9 @@ class View{
             <div id="actionsAndBetsDiv" class="d-flex d-flex flex-column align-items-center">
                 <div id="betsDiv" class="d-flex flex-column w-50 col-3"></div> 
             </div>
-            <div id="countingLog" class="d-flex pb-5 justify-content-center text-white overflow-autostyle="max-height: 120px;">
+            <div id="countingLog" class="d-flex pb-1 justify-content-center text-white overflow-auto style="max-height: 120px;">
+            </div>
+            <div id="recomendation" class="d-flex justify-content-center text-white overflow-auto style="max-height: 120px;">
             </div>
             <div id="resultLogDiv" class="d-flex pb-5 justify-content-center text-white overflow-auto" style="max-height: 120px;">
             </div>
@@ -938,7 +977,7 @@ class View{
             playersDiv.innerHTML +=
             `
             <div id=${playerDiv} class="d-flex flex-column w-50">
-                <p class="m-0 text-white text-center rem2">${player.getName}</p>
+                <p class="m-0 text-white text-center rem3">${player.getName}</p>
                     <div class="text-white d-flex flex-column justify-content-center align-items-center">
                     <p class="rem1 text-left">Status:${player.getGameStatus}&nbsp</a>
                     <p class="rem1 text-left">Bet:${player.getBet}&nbsp</a>
@@ -1081,7 +1120,7 @@ class View{
         for(let i = 0; i < table.getResultLog.length; i++){
             div.innerHTML +=
             `
-            <p>rounnd ${i + 1}</p>
+            <p class="h3">rounnd ${i + 1}</p>
             `
             div.append(table.getResultLog[i]);
         }
@@ -1094,17 +1133,33 @@ class View{
         div.classList.add("text-white", "w-300");
         div.innerHTML += 
             `
-            <p>All Player Counting -> ${table.getAllPlayerCounting}</p>
-            <p>Dealer Counting -> ${table.getHouse.getCounting}</p>
+            <p class="h3">All Player Counting -> ${table.getAllPlayerCounting}</p>
             `   
-        table.getPlayers.forEach((player) => {
-            div.innerHTML += 
-                `
-                <p>${player.getName}'s counting -> ${player.getCounting}</p>
-                `
-        })
+        // <p>Dealer Counting -> ${table.getHouse.getCounting}</p>
+        // 各プレイヤーのカウンティングはいらない…？
+        // table.getPlayers.forEach((player) => {
+        //     console.log(player.recomendationAction(table))
+        //     div.innerHTML += 
+        //         `
+        //         <p>${player.getName}'s Counting -> ${player.getCounting}</p>
+        //         `
+        // })
         countingLog.append(div);        
     }
+    // <p>${player.recomendationAction(table)}</p> recomendation
+
+    static renderRecomendation(table:Table):void{
+        let countingLog:HTMLElement = document.getElementById("recomendation")!;
+        let div:HTMLElement = document.createElement("div");
+        div.classList.add("text-white", "w-300");
+        let userData:Player[] = table.getPlayers.filter(user=>user.getType === "user");
+        div.innerHTML += 
+            `
+            <p class="h3">This player's recomended action is ${userData[0].recomendationAction(table)}</p>
+            `   
+        countingLog.append(div);         
+    }
+
     static renderGameOver():void{
         let actionsAndBetsDiv:HTMLElement = document.getElementById("actionsAndBetsDiv")!;
         actionsAndBetsDiv.innerHTML +=
